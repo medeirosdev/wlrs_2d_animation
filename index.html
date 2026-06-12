@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>WLRS + FFT — Animação 2D Didática</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #080c14; overflow: hidden; }
+    canvas { display: block; }
+    #hud {
+      position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+      text-align: center; pointer-events: none;
+      font-family: 'Courier New', monospace;
+    }
+    #title { font-size: 13px; letter-spacing: 3px; color: rgba(160,210,255,0.85);
+             text-shadow: 0 0 12px rgba(80,160,255,0.7); }
+    #phase { margin-top: 5px; font-size: 10px; letter-spacing: 2px;
+             color: rgba(100,160,220,0.55); }
+    #bar   { margin: 6px auto 0; width: 200px; height: 2px;
+             background: rgba(255,255,255,0.07); border-radius: 2px; overflow: hidden; }
+    #fill  { height: 100%; background: rgba(100,180,255,0.45);
+             border-radius: 2px; width: 0%; transition: width 0.1s linear; }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div id="title">WLRS + FFT — Espectroscopia de Refletância</div>
+  <div id="phase">Iniciando…</div>
+  <div id="bar"><div id="fill"></div></div>
+</div>
+<script>
+// ─── Canvas setup ─────────────────────────────────────────────────────────────
+const canvas  = document.getElementById('c');
+const ctx     = canvas.getContext('2d');
+const phaseEl = document.getElementById('phase');
+const fillEl  = document.getElementById('fill');
+
+function resize() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ─── Math helpers ─────────────────────────────────────────────────────────────
+const clamp  = (v,a,b) => Math.max(a, Math.min(b, v));
+const remap  = (v,a,b,c,d) => c + (d-c) * clamp((v-a)/(b-a),0,1);
+const ss     = t => t*t*(3-2*t);   // smoothstep
+
+// ─── Physics ──────────────────────────────────────────────────────────────────
+const N2 = 1.31, D0 = 6000;
+function rLam(lam, d) { return 0.5 - 0.5 * Math.cos(4*Math.PI*N2*d/lam); }
+
+// Pre-compute spectrum and FFT-like curve (static, jitter-free)
+const NLAM = 300;
+const specPts = Array.from({length: NLAM}, (_,i) => {
+  const lam = 400 + 450 * i/(NLAM-1);
+  return { lam, r: rLam(lam, D0) };
+});
+
+const NFFT = 300;
+const fftPts = Array.from({length: NFFT}, (_,i) => {
+  const d = i/(NFFT-1) * 11000;
+  const peak = Math.exp(-((d-D0)**2) / 180000);
+  // small noise sidelobes
+  const side = 0.08 * Math.exp(-((d-D0)**2) / 3000000);
+  return { d, mag: peak + side };
+});
+
+// ─── Timeline (seconds, total = 24s loop) ─────────────────────────────────────
+const TOTAL = 24;
+const PT    = [0, 3, 7, 11, 15, 19, 22];   // phase start times
+const LABELS = [
+  'Setup — componentes do sistema óptico',
+  'Fase 1 — Luz branca emitida para a amostra',
+  'Fase 2 — Reflexão: cada λ volta com intensidade diferente',
+  'Fase 3 — Espectrómetro captura r(λ) — 22 oscilações visíveis',
+  'Fase 4 — FFT transforma r(λ) num único pico de frequência',
+  'Fase 5 — Pico FFT → d = 6.000 nm  (sem phase wrapping)',
+  'Resultado — espessura recuperada com precisão de ~100 nm',
+];
+
+function getPhase(ct) {
+  for (let i = PT.length-1; i >= 0; i--) if (ct >= PT[i]) return i;
+  return 0;
+}
+
+// ─── Colors ───────────────────────────────────────────────────────────────────
+const RAINBOW = ['#8800ff','#3355ff','#00aaff','#00dd88','#aaff00','#ffcc00','#ff3300'];
+const C = {
+  bg:      '#080c14',
+  grid:    '#111827',
+  outline: '#2a4060',
+  label:   '#7799bb',
+  labelHi: '#aaccee',
+  beam:    '#ffffff',
+  beamV:   '#88ddff',
+  specLine:'#00aaff',
+  fftLine: '#ff8800',
+  peak:    '#00ff88',
+  result:  '#00ff88',
+};
+
+// ─── Draw helpers ─────────────────────────────────────────────────────────────
+function setA(a) { ctx.globalAlpha = clamp(a,0,1); }
+
+function text(str, x, y, {color=C.label, size=10, align='center', bold=false}={}) {
+  ctx.save();
+  ctx.font = `${bold?'bold ':''} ${size}px 'Courier New'`;
+  ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = 'middle';
+  ctx.fillText(str, x, y);
+  ctx.restore();
+}
+
+function line(x1,y1,x2,y2,{color='#fff',width=1.5,dash=[],glow=false}={}) {
+  ctx.save();
+  ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = 'round';
+  if (dash.length) ctx.setLineDash(dash);
+  if (glow) { ctx.shadowColor = color; ctx.shadowBlur = 10; }
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  ctx.restore();
+}
+
+function rect(x,y,w,h,{stroke=C.outline,fill='',lw=1.5,r=5}={}) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x,y,w,h,r);
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
+  ctx.restore();
+}
+
+function arrow(x,y,angle,{color='#fff',size=7}={}) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.translate(x,y); ctx.rotate(angle);
+  ctx.beginPath();
+  ctx.moveTo(0,0); ctx.lineTo(-size,-size*0.45); ctx.lineTo(-size,size*0.45);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+// Animate a line from (x1,y1) to (x2,y2) with progress p ∈ [0,1]
+function beamSeg(x1,y1,x2,y2,p,{color='#fff',width=2.5,glow=true}={}) {
+  if (p<=0) return;
+  const ex = x1+(x2-x1)*Math.min(1,p), ey = y1+(y2-y1)*Math.min(1,p);
+  line(x1,y1,ex,ey,{color,width,glow});
+}
+
+// Lens shape (two arcs)
+function lens(x,y,rx,ry,{color=C.outline}={}) {
+  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 2;
+  // left arc
+  ctx.beginPath();
+  ctx.arc(x - rx*0.72, y, rx, -Math.PI/2.8, Math.PI/2.8);
+  ctx.stroke();
+  // right arc
+  ctx.beginPath();
+  ctx.arc(x + rx*0.72, y, rx, Math.PI - Math.PI/2.8, Math.PI + Math.PI/2.8);
+  ctx.stroke();
+  // top/bottom closing lines
+  const dy = Math.sqrt(rx*rx - (rx*0.72)**2) * 0; // zero = no lines needed
+  ctx.restore();
+}
+
+// ─── Component drawers ────────────────────────────────────────────────────────
+function drawSource(x,y,S,glow) {
+  const w=S*3.5, h=S*1.6, r2=S*0.45;
+  if (glow>0) {
+    const g = ctx.createRadialGradient(x,y,0,x,y,S*6);
+    g.addColorStop(0,`rgba(255,245,200,${glow*0.25})`);
+    g.addColorStop(1,'rgba(255,245,200,0)');
+    ctx.save(); ctx.fillStyle=g;
+    ctx.beginPath(); ctx.arc(x,y,S*6,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  rect(x-w/2, y-h/2, w, h, {fill:'#0d1825', stroke: glow>0?'#5588aa':C.outline, r:S*0.4});
+  // aperture
+  ctx.save();
+  ctx.beginPath(); ctx.arc(x+w/2-r2, y, r2*0.55, 0, Math.PI*2);
+  ctx.strokeStyle = glow>0 ? `rgba(255,240,180,${glow*0.9})` : C.outline;
+  if (glow>0) { ctx.fillStyle=`rgba(255,240,180,${glow*0.75})`; ctx.fill(); }
+  ctx.lineWidth=1.5; ctx.stroke();
+  ctx.restore();
+  // label inside
+  text('LUZ', x-r2, y-S*0.1, {size: S*0.9, color: glow>0?'#aabbcc':'#445566'});
+  text('BRANCA', x-r2, y+S*0.9, {size: S*0.9, color: glow>0?'#aabbcc':'#445566'});
+}
+
+function drawDichroic(x,y,S) {
+  const sz = S*3.5;
+  rect(x-sz/2, y-sz/2, sz, sz, {fill:'rgba(30,60,100,0.3)', stroke:C.outline, r:2});
+  // diagonal mirror line
+  ctx.save();
+  ctx.strokeStyle = '#6699cc'; ctx.lineWidth = 3;
+  ctx.shadowColor='#4488bb'; ctx.shadowBlur=6;
+  ctx.beginPath();
+  ctx.moveTo(x-sz/2+4, y+sz/2-4);
+  ctx.lineTo(x+sz/2-4, y-sz/2+4);
+  ctx.stroke();
+  ctx.restore();
+  // iridescent coating hint
+  const ird = ctx.createLinearGradient(x-sz/2,y+sz/2, x+sz/2,y-sz/2);
+  ird.addColorStop(0,'rgba(100,0,255,0.12)');
+  ird.addColorStop(0.5,'rgba(0,200,255,0.12)');
+  ird.addColorStop(1,'rgba(255,100,0,0.12)');
+  ctx.save(); ctx.fillStyle=ird;
+  ctx.beginPath();
+  ctx.moveTo(x-sz/2+4, y+sz/2-4);
+  ctx.lineTo(x+sz/2-4, y-sz/2+4);
+  ctx.lineTo(x+sz/2, y-sz/2); ctx.lineTo(x-sz/2, y+sz/2);
+  ctx.closePath(); ctx.fill(); ctx.restore();
+}
+
+function drawObjective(x,y,S) {
+  lens(x, y, S*2.2, S*1.0, {color:'#5577aa'});
+  // barrel
+  ctx.save(); ctx.strokeStyle='#334466'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.arc(x,y,S*2.4,0,Math.PI*2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawSample(x,y,S,ifActive) {
+  const w=S*8, hIce=S*0.6, hC=S*0.5;
+  const lx = x + w/2 + S*1.4;   // x position for right-side labels
+  // carbon
+  rect(x-w/2, y, w, hC, {fill:'#181818', stroke:'#333344', r:0});
+  text('Carbono (Quantifoil)', lx, y+hC*0.5, {size:S*0.7, color:'#445566', align:'left'});
+  // ice
+  const ig = ctx.createLinearGradient(x-w/2,y-hIce, x+w/2,y);
+  ig.addColorStop(0,'rgba(80,150,230,0.35)');
+  ig.addColorStop(0.5,'rgba(120,200,255,0.55)');
+  ig.addColorStop(1,'rgba(80,150,230,0.35)');
+  rect(x-w/2, y-hIce, w, hIce, {fill:ig, stroke:'#5588bb', r:0});
+  // labels on right side — no overlap with fringe glow
+  text('Gelo vítreo  n₂ = 1,31', lx, y-hIce*0.5, {size:S*0.7, color:'#5599cc', align:'left'});
+  text('d = 5–7 µm', lx, y-hIce - S*1.0, {size:S*0.8, color:'#7799bb', align:'left', bold:true});
+
+  // interference fringe glow when active
+  if (ifActive > 0) {
+    const fw = w * 0.7;
+    for (let i=0; i<7; i++) {
+      const t = i/6;
+      const lam = 400 + 450*t;
+      const rv  = rLam(lam, D0);
+      const cx2 = x - fw/2 + fw*t;
+      ctx.save();
+      ctx.globalAlpha = ifActive * rv * 0.7;
+      ctx.fillStyle = RAINBOW[i];
+      ctx.shadowColor = RAINBOW[i]; ctx.shadowBlur = 8;
+      ctx.fillRect(cx2-2, y-hIce-1, 4, hIce+2);
+      ctx.restore();
+    }
+  }
+}
+
+function drawSpectrometer(x,y,S,active) {
+  const w=S*5, h=S*4;
+  rect(x-w/2,y-h/2,w,h,{fill:'#0d1825',stroke: active>0?'#4488aa':C.outline, r:4});
+  // prism
+  ctx.save();
+  ctx.strokeStyle = active>0?'#aaddff':'#334455'; ctx.lineWidth=1.5;
+  ctx.beginPath();
+  ctx.moveTo(x-S*1.2, y+S*1.0);
+  ctx.lineTo(x+S*1.2, y+S*1.0);
+  ctx.lineTo(x,       y-S*1.2);
+  ctx.closePath(); ctx.stroke();
+  // rainbow dispersed lines from prism
+  if (active>0) {
+    RAINBOW.forEach((c,i) => {
+      const a = (i/(RAINBOW.length-1)-0.5)*0.9;
+      ctx.globalAlpha = active*0.75;
+      ctx.strokeStyle = c; ctx.shadowColor=c; ctx.shadowBlur=4;
+      ctx.lineWidth=1.5;
+      ctx.beginPath();
+      ctx.moveTo(x, y-S*1.2);
+      ctx.lineTo(x+Math.sin(a)*S*2, y+S*1.6);
+      ctx.stroke();
+    });
+    ctx.globalAlpha=1;
+  }
+  ctx.restore();
+}
+
+// ─── Chart drawers ────────────────────────────────────────────────────────────
+function drawChart(cx,cy,cw,ch,{title,xLabel,progress,color,data,xKey,yKey,xMin,xMax,yMin=0,yMax=1,peakX=null,resultText=null,resultSub=null,resultAlpha=0}={}) {
+  // Background
+  rect(cx,cy,cw,ch,{fill:'#090f1a',stroke:C.outline,r:6});
+
+  // Title
+  text(title, cx+cw/2, cy+12, {size:9, color:'#7799bb'});
+
+  // Plot area
+  const px=cx+28, py=cy+ch-22, pw=cw-36, ph=ch-38;
+  // axes
+  line(px,py-ph,px,py,{color:C.outline,width:1});
+  line(px,py,px+pw,py,{color:C.outline,width:1});
+  text(xLabel, px+pw/2, py+13, {size:8, color:'#334455'});
+  text(String(xMin), px, py+10,    {size:8, color:'#334455'});
+  text(String(xMax), px+pw, py+10, {size:8, color:'#334455'});
+
+  // Grid
+  for (let g=1;g<=3;g++) {
+    line(px,py-ph*g/4,px+pw,py-ph*g/4,{color:'#111a28',width:0.5,dash:[2,4]});
+  }
+
+  // Curve
+  const nDraw = Math.floor(data.length * Math.min(1, progress));
+  if (nDraw > 1) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.strokeStyle = color; ctx.lineWidth = 1.6;
+    ctx.shadowColor = color; ctx.shadowBlur = 5;
+    for (let i=0; i<nDraw; i++) {
+      const sx = px + (data[i][xKey]-xMin)/(xMax-xMin) * pw;
+      const sy = py - (data[i][yKey]-yMin)/(yMax-yMin) * ph;
+      i===0 ? ctx.moveTo(sx,sy) : ctx.lineTo(sx,sy);
+    }
+    ctx.stroke(); ctx.restore();
+  }
+
+  // Peak dashed line
+  if (peakX !== null && progress > 0.85) {
+    const sx = px + (peakX-xMin)/(xMax-xMin)*pw;
+    line(sx,py,sx,py-ph,{color:C.peak,width:1.5,dash:[4,3]});
+    arrow(sx,py,Math.PI/2,{color:C.peak,size:6});
+    text('pico', sx, py-ph+8, {size:8, color:C.peak, bold:true});
+  }
+
+  // Result overlay
+  if (resultText && resultAlpha>0) {
+    ctx.save(); ctx.globalAlpha = resultAlpha;
+    rect(cx+cw*0.1, cy+ch*0.28, cw*0.8, ch*0.44,
+         {fill:'rgba(0,40,20,0.92)',stroke:C.result,lw:1.5,r:6});
+    text(resultText,    cx+cw/2, cy+ch*0.47, {size:13, color:C.result, bold:true});
+    if (resultSub)
+    text(resultSub,     cx+cw/2, cy+ch*0.62, {size:8, color:'#66bb88'});
+    ctx.restore();
+  }
+}
+
+// ─── Main loop ────────────────────────────────────────────────────────────────
+let t0=null;
+
+function animate(ts) {
+  requestAnimationFrame(animate);
+  if (!t0) t0=ts;
+
+  const elapsed = (ts-t0)/1000;
+  const ct  = elapsed % TOTAL;
+  const ph  = getPhase(ct);
+
+  const W=canvas.width, H=canvas.height;
+  const S = Math.min(W/900, H/580) * 16;  // base scale unit
+
+  // Layout: left 54% = setup, right 44% = charts
+  const SX = W*0.54;  // setup right boundary
+  const MX = W*0.28;  // x-center of setup area
+
+  const srcPos  = { x: W*0.06,  y: H*0.38 };
+  const bsPos   = { x: W*0.40,  y: H*0.38 };
+  const specPos = { x: W*0.50,  y: H*0.13 };
+  const objPos  = { x: W*0.40,  y: H*0.57 };
+  const smpPos  = { x: W*0.40,  y: H*0.74 };
+
+  const chartW  = W*0.39;
+  const chartH  = H*0.38;
+  const chartX  = W*0.57;
+  const chart1Y = H*0.05;
+  const chart2Y = H*0.54;
+
+  phaseEl.textContent = LABELS[ph] || '';
+  fillEl.style.width  = ((ct/TOTAL)*100).toFixed(1)+'%';
+
+  // Clear
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=C.bg; ctx.fillRect(0,0,W,H);
+
+  // Divider
+  const ca = ss(remap(ct,0,2,0,1));
+  setA(ca*0.4);
+  line(SX+W*0.01, H*0.04, SX+W*0.01, H*0.94,{color:'#1a2a3a',width:1,dash:[4,6]});
+  setA(ca*0.35);
+  text('SETUP ÓPTICO',    MX,      H*0.04, {size:9, color:'#2a4060'});
+  text('PROCESSAMENTO',   W*0.775, H*0.04, {size:9, color:'#2a4060'});
+
+  setA(1);
+
+  // ── Static guide paths ────────────────────────────────────────
+  setA(ca*0.2);
+  const guideOpts = {color:'#1e3050',width:1,dash:[3,5]};
+  // source → bs
+  line(srcPos.x+S*2.2, srcPos.y, bsPos.x-S*2.1, bsPos.y, guideOpts);
+  // bs → obj
+  line(bsPos.x, bsPos.y+S*2.1, objPos.x, objPos.y-S*2.8, guideOpts);
+  // obj → sample
+  line(objPos.x, objPos.y+S*2.8, smpPos.x, smpPos.y-S*1.2, guideOpts);
+  // bs → spec (upward)
+  line(bsPos.x, bsPos.y-S*2.1, specPos.x, specPos.y+S*2.5, guideOpts);
+  setA(1);
+
+  // ── Components ────────────────────────────────────────────────
+  const srcGlow = ph>=1 ? ss(remap(ct, PT[1], PT[1]+1.2, 0,1)) : 0;
+  setA(ca); drawSource(srcPos.x, srcPos.y, S, srcGlow);
+  // Source label: below the box, centered
+  text('Fonte de Luz Branca', srcPos.x, srcPos.y + S*2.5, {size:S*0.65, color:C.label});
+
+  drawDichroic(bsPos.x, bsPos.y, S);
+  // Dichroic label: LEFT side — avoids the beam path that goes up-right to spectrometer
+  text('Espelho', bsPos.x - S*3.0, bsPos.y - S*0.6, {size:S*0.65, color:C.label, align:'right'});
+  text('Dicróico 45°', bsPos.x - S*3.0, bsPos.y + S*0.8, {size:S*0.65, color:C.label, align:'right'});
+
+  const specActive = ph>=3 ? ss(remap(ct, PT[3], PT[3]+1,0,1)) : 0;
+  drawSpectrometer(specPos.x, specPos.y, S, specActive);
+  // Spectrometer label: RIGHT side of the box, vertically centered
+  text('Espectrômetro', specPos.x + S*3.2, specPos.y - S*0.7, {size:S*0.65, color:C.label, align:'left'});
+  text('(512 pontos)',  specPos.x + S*3.2, specPos.y + S*0.8, {size:S*0.65, color:'#4a6880', align:'left'});
+
+  drawObjective(objPos.x, objPos.y, S);
+  // Objective label: right side, vertically centered on lens
+  text('Objetiva', objPos.x + S*3.2, objPos.y, {size:S*0.65, color:C.label, align:'left'});
+
+  const ifActive = ph>=2 ? ss(remap(ct, PT[2], PT[2]+1.5, 0,1)) : 0;
+  drawSample(smpPos.x, smpPos.y, S, ifActive);
+
+  setA(1);
+
+  // ── BEAMS ─────────────────────────────────────────────────────
+  // Ph1: white beam source → bs (horizontal right)
+  if (ph>=1) {
+    const p = remap(ct, PT[1], PT[1]+1.5, 0,1);
+    beamSeg(srcPos.x+S*2.2, srcPos.y, bsPos.x-S*2.1, bsPos.y, p,
+            {color:'#ffffff',width:3});
+    if (p>=1) arrow(bsPos.x-S*2.1, bsPos.y, 0, {color:'#ffffff',size:8});
+  }
+
+  // Ph1 still: beam continues bs → obj → sample (downward, after hitting bs)
+  if (ph>=1) {
+    const p1 = remap(ct, PT[1]+1.3, PT[1]+3.5, 0,1);
+    beamSeg(bsPos.x, bsPos.y+S*2.1, objPos.x, objPos.y-S*2.8, p1,
+            {color:'#aaddff',width:2.5});
+    if (p1>=1) {
+      const p2 = remap(ct, PT[1]+2.8, PT[1]+4.5, 0,1);
+      beamSeg(objPos.x, objPos.y+S*2.8, smpPos.x, smpPos.y-S*1.2, p2,
+              {color:'#88ccff',width:2});
+      if (p2>=1) arrow(smpPos.x, smpPos.y-S*1.2, Math.PI/2,{color:'#88ccff',size:7});
+    }
+  }
+
+  // Ph2: reflected rainbow beams going back up through objective → bs
+  if (ph>=2) {
+    const p = remap(ct, PT[2], PT[2]+2, 0,1);
+    RAINBOW.forEach((col,i) => {
+      const ox = (i-3)*S*0.45;
+      beamSeg(smpPos.x+ox, smpPos.y-S*1.2, objPos.x+ox, objPos.y+S*2.8, p,
+              {color:col, width:1.5});
+    });
+    // continue up through objective to bs
+    if (p>=0.8) {
+      const p2 = remap(ct, PT[2]+1.5, PT[2]+3, 0,1);
+      RAINBOW.forEach((col,i) => {
+        const ox = (i-3)*S*0.4;
+        beamSeg(objPos.x+ox, objPos.y-S*2.8, bsPos.x+ox, bsPos.y+S*2.1, p2,
+                {color:col, width:1.5});
+      });
+    }
+  }
+
+  // Ph3: reflected beams bs → spectrometer (horizontal, colored)
+  if (ph>=3) {
+    const p = remap(ct, PT[3], PT[3]+1.8, 0,1);
+    RAINBOW.forEach((col,i) => {
+      const oy = (i-3)*S*0.4;
+      beamSeg(bsPos.x, bsPos.y-S*2.1, specPos.x, specPos.y+S*2.5+oy, p,
+              {color:col, width:1.5});
+    });
+  }
+
+  // ── CHARTS ────────────────────────────────────────────────────
+  // Spectrum chart
+  const specChAlpha   = ph>=4 ? ss(remap(ct,PT[4],PT[4]+0.5,0,1)) : 0;
+  const specChProgress= ph>=4 ? remap(ct, PT[4]+0.2, PT[4]+2.5, 0,1) : 0;
+
+  if (specChAlpha>0) {
+    setA(specChAlpha);
+    drawChart(chartX, chart1Y, chartW, chartH, {
+      title:    'Espectro r(λ) medido pelo espectrômetro',
+      xLabel:   'Comprimento de onda λ (nm)',
+      progress: specChProgress,
+      color:    C.specLine,
+      data:     specPts,
+      xKey:     'lam', yKey: 'r',
+      xMin:     400, xMax: 850,
+    });
+    // annotation: oscillation count
+    if (specChProgress > 0.9) {
+      setA(specChAlpha * 0.9);
+      text('~22 oscilações', chartX+chartW*0.52, chart1Y+chartH*0.12,
+           {size:9, color:'rgba(255,200,50,0.85)', bold:true});
+      text('← câmera RGB mede apenas 3 pontos → ambiguidade!', chartX+chartW*0.52, chart1Y+chartH*0.22,
+           {size:8, color:'rgba(255,120,80,0.7)'});
+    }
+    setA(1);
+  }
+
+  // FFT chart
+  const fftChAlpha   = ph>=5 ? ss(remap(ct,PT[5],PT[5]+0.5,0,1)) : 0;
+  const fftChProgress= ph>=5 ? remap(ct, PT[5]+0.2, PT[5]+2.0, 0,1) : 0;
+  const resultAlpha  = ph>=6 ? ss(remap(ct,PT[6],PT[6]+0.8,0,1)) : 0;
+
+  if (fftChAlpha>0) {
+    setA(fftChAlpha);
+    drawChart(chartX, chart2Y, chartW, chartH, {
+      title:       'FFT → espessura d  (um único pico, sem ambiguidade)',
+      xLabel:      'Espessura d (nm)',
+      progress:    fftChProgress,
+      color:       C.fftLine,
+      data:        fftPts,
+      xKey:        'd', yKey: 'mag',
+      xMin:        0, xMax: 11000,
+      peakX:       D0,
+      resultText:  'd = 6.000 nm  ✓',
+      resultSub:   'erro < 100 nm  |  SNR > 20  |  sem phase wrapping',
+      resultAlpha,
+    });
+    setA(1);
+  }
+
+  // FFT arrow between charts
+  if (fftChAlpha>0) {
+    const ax = chartX + chartW/2;
+    setA(fftChAlpha * 0.7);
+    line(ax, chart1Y+chartH+3, ax, chart2Y-3,
+         {color:'#2a4a7a',width:1.5,dash:[3,4]});
+    arrow(ax, chart2Y-3, Math.PI/2, {color:'#2a4a7a',size:7});
+    text('FFT', ax+16, (chart1Y+chartH+chart2Y)/2,
+         {size:9, color:'#2a4a7a'});
+    setA(1);
+  }
+
+  // Connection: spectrometer → chart 1
+  if (specChAlpha>0) {
+    setA(specChAlpha*0.3);
+    line(specPos.x+S*2.6, specPos.y, chartX, chart1Y+chartH*0.5,
+         {color:'#224466',width:1,dash:[3,5]});
+    setA(1);
+  }
+}
+
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
