@@ -298,8 +298,10 @@ function frame(now){
     drawMol(mx,my,molAng,m.r,.82,crysT>.75);
   });
 
-  /* crystal hexagons */
+  /* crystal hexagons — clipped to left panel */
   if(crysT>.04){
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 86, PW, H-86); ctx.clip();
     const maxR=crysT*PW*1.05;
     hexPts.forEach(h=>{
       const px=h.x, py=h.y+88;
@@ -308,7 +310,6 @@ function frame(now){
       if(dmin<maxR){
         const lt=cl((maxR-dmin)/52,0,1);
         drawHex(px,py,HR,`rgba(182,220,255,${lt*.17})`,`rgba(200,232,255,${lt*.65})`, .7);
-        /* H-bond vertex dots */
         if(lt>.55){
           for(let i=0;i<6;i++){
             const a=PI/6+i*PI/3;
@@ -318,6 +319,7 @@ function frame(now){
         }
       }
     });
+    ctx.restore();
   }
 
   /* expansion arrows */
