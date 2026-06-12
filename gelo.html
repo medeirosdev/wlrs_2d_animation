@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Gelo Cristalino vs Gelo Vítreo — Cryo-EM</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{
+    min-height:100vh; background:#040710;
+    display:flex; flex-direction:column;
+    justify-content:center; align-items:center; gap:10px;
+  }
+  canvas{display:block; border-radius:14px; box-shadow:0 28px 80px #000000c0;}
+  .sub{color:#1e2e40; font-size:11px; font-family:monospace; letter-spacing:.06em;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="sub">CNPEM / LNLS — animação didática — ciclo 13 s</div>
+<script>
+const C=document.getElementById('c');
+const ctx=C.getContext('2d');
+const W=920,H=540; C.width=W; C.height=H;
+const PI=Math.PI, PW=W/2;
+const CYCLE=13000;
+
+/* ── utils ──────────────────────────────────────────── */
+const sm =(t)=>t<=0?0:t>=1?1:t*t*(3-2*t);
+const sm2=(t)=>t<=0?0:t>=1?1:t*t*t*(t*(6*t-15)+10);
+const cl =(v,a,b)=>Math.max(a,Math.min(b,v));
+const lp =(a,b,t)=>a+(b-a)*t;
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);   ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+/* ── callout box ────────────────────────────────────── */
+function callout(x,y,w,lines,color,alpha,size){
+  if(alpha<.02) return;
+  const lh=15, pad=10, h=pad*1.5+lines.length*lh;
+  ctx.save();
+  ctx.fillStyle=`rgba(4,8,20,${alpha*.88})`;
+  roundRect(ctx,x,y,w,h,7); ctx.fill();
+  ctx.strokeStyle=`rgba(${color},${alpha*.75})`; ctx.lineWidth=1;
+  roundRect(ctx,x,y,w,h,7); ctx.stroke();
+  ctx.font=`${size||11}px Segoe UI`;
+  ctx.fillStyle=`rgba(${color},${alpha})`;
+  ctx.textAlign='left';
+  lines.forEach((l,i)=>ctx.fillText(l, x+pad, y+pad+lh*(i+.7)));
+  ctx.restore();
+}
+
+/* ── hex lattice (panel-local px) ───────────────────── */
+const HP=30, HY=HP*Math.sqrt(3)/2, HR=HP/Math.sqrt(3)*.88;
+const hexPts=[];
+for(let row=-1;row<=Math.ceil(H/HY)+2;row++)
+  for(let col=-2;col<=Math.ceil(PW/HP)+2;col++)
+    hexPts.push({x:col*HP+(row&1)*HP*.5, y:row*HY});
+
+function drawHex(cx,cy,r,fill,stroke,lw){
+  ctx.beginPath();
+  for(let i=0;i<6;i++){
+    const a=PI/6+i*PI/3;
+    i?ctx.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a))
+     :ctx.moveTo(cx+r*Math.cos(a),cy+r*Math.sin(a));
+  }
+  ctx.closePath();
+  if(fill){ctx.fillStyle=fill;ctx.fill();}
+  if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw||1;ctx.stroke();}
+}
+
+/* ── water molecule: O + 2 H ─────────────────────────
+   angle = orientation of the molecule's H-O-H bisector */
+function drawMol(cx,cy,angle,rO,alpha,frozen){
+  const bond=rO*1.75, rH=rO*.52, ha=52*PI/180;
+  // bonds first (behind atoms)
+  ctx.strokeStyle=`rgba(${frozen?'130,180,220':'100,155,235'},${alpha*.42})`;
+  ctx.lineWidth=.8;
+  [-ha,ha].forEach(da=>{
+    const a=angle+da;
+    ctx.beginPath(); ctx.moveTo(cx,cy);
+    ctx.lineTo(cx+Math.cos(a)*bond, cy+Math.sin(a)*bond); ctx.stroke();
+  });
+  // H atoms
+  [-ha,ha].forEach(da=>{
+    const a=angle+da;
+    ctx.fillStyle=`rgba(${frozen?'215,235,255':'215,235,255'},${alpha*.65})`;
+    ctx.beginPath(); ctx.arc(cx+Math.cos(a)*bond, cy+Math.sin(a)*bond, rH, 0, PI*2); ctx.fill();
+  });
+  // O atom
+  if(frozen){
+    const g=ctx.createRadialGradient(cx-rO*.2,cy-rO*.2,0,cx,cy,rO);
+    g.addColorStop(0,`rgba(160,210,248,${alpha})`);
+    g.addColorStop(1,`rgba(90,145,215,${alpha})`);
+    ctx.fillStyle=g;
+  } else {
+    const g=ctx.createRadialGradient(cx-rO*.25,cy-rO*.25,0,cx,cy,rO);
+    g.addColorStop(0,`rgba(115,175,255,${alpha})`);
+    g.addColorStop(1,`rgba(45,100,220,${alpha})`);
+    ctx.fillStyle=g;
+  }
+  ctx.beginPath(); ctx.arc(cx,cy,rO,0,PI*2); ctx.fill();
+}
+
+/* ── biological cell ────────────────────────────────── */
+function drawCell(cx,cy,dmg){
+  const R=64, NR=23;
+  ctx.save(); ctx.translate(cx,cy);
+
+  /* preserved: green glow */
+  if(dmg<0){
+    const a=-dmg;
+    const g=ctx.createRadialGradient(0,0,R-5,0,0,R+32);
+    g.addColorStop(0,`rgba(38,210,98,${a*.55})`);
+    g.addColorStop(1,'rgba(38,210,98,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,R+32,0,PI*2); ctx.fill();
+  }
+
+  if(dmg>.06){ctx.scale(1+dmg*.09,1-dmg*.07); ctx.translate(dmg*8,0);}
+
+  /* cytoplasm fill */
+  ctx.fillStyle=`rgba(44,88,180,${.28-dmg*.07})`;
+  if(dmg>.42){
+    ctx.beginPath();
+    for(let i=0;i<=72;i++){
+      const a=i/72*PI*2;
+      const j=1+dmg*.22*Math.sin(a*7+dmg*9+1.3);
+      i?ctx.lineTo(R*j*Math.cos(a),R*j*Math.sin(a))
+       :ctx.moveTo(R*j*Math.cos(a),R*j*Math.sin(a));
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle=`rgba(228,65,50,${sm(dmg-.3)*.92})`; ctx.lineWidth=2.5; ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.arc(0,0,R,0,PI*2); ctx.fill();
+    ctx.strokeStyle=dmg<0?'rgba(42,220,105,.9)':'rgba(88,148,235,.9)';
+    ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,R,0,PI*2); ctx.stroke();
+  }
+
+  /* nucleus */
+  const nx=dmg>.2?dmg*16:0;
+  ctx.fillStyle=`rgba(238,152,48,${.52-dmg*.12})`;
+  ctx.beginPath(); ctx.arc(nx,0,NR,0,PI*2); ctx.fill();
+  ctx.strokeStyle=`rgba(252,172,62,.8)`; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.arc(nx,0,NR,0,PI*2); ctx.stroke();
+
+  /* organelles */
+  [[-40,-21],[30,38],[-28,34],[44,-17],[-50,9],[16,-44]].forEach(([ox,oy])=>{
+    const sx=dmg>.35?(ox>0?1:-1)*dmg*13:0;
+    const sy=dmg>.35?(oy>0?1:-1)*dmg*8:0;
+    ctx.fillStyle=`rgba(200,140,68,${.72-dmg*.22})`;
+    ctx.beginPath(); ctx.arc(ox+sx,oy+sy,4.5,0,PI*2); ctx.fill();
+  });
+
+  /* cracks */
+  if(dmg>.46){
+    const a=sm(dmg-.46)*2*.88;
+    ctx.strokeStyle=`rgba(220,48,36,${a})`; ctx.lineWidth=1.6;
+    [[{x:R*.28,y:-R*.52},{x:R*.6,y:-R*.08},{x:R*.84,y:R*.42}],
+     [{x:-R*.48,y:R*.3},{x:-R*.18,y:R*.65}],
+     [{x:-R*.08,y:-R*.63},{x:R*.14,y:-R*.88}]].forEach(pts=>{
+      ctx.beginPath();
+      pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+      ctx.stroke();
+    });
+  }
+
+  /* checkmark */
+  if(dmg<-.72){
+    const a=(-dmg-.72)/.28;
+    ctx.strokeStyle=`rgba(46,218,104,${a*.92})`; ctx.lineWidth=3;
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.beginPath(); ctx.moveTo(-20,4); ctx.lineTo(-5,20); ctx.lineTo(22,-16); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* ── phase badge ────────────────────────────────────── */
+function phaseBadge(x,y,label,color,alpha){
+  if(alpha<.02) return;
+  ctx.save();
+  ctx.fillStyle=`rgba(${color},.14)`;
+  roundRect(ctx,x,y,130,24,5); ctx.fill();
+  ctx.strokeStyle=`rgba(${color},${alpha*.85})`; ctx.lineWidth=1;
+  roundRect(ctx,x,y,130,24,5); ctx.stroke();
+  ctx.font='bold 11px Segoe UI';
+  ctx.fillStyle=`rgba(${color},${alpha})`;
+  ctx.textAlign='center';
+  ctx.fillText('● '+label, x+65, y+16);
+  ctx.restore();
+}
+
+/* ── integrity bar ──────────────────────────────────── */
+function integrityBar(ox,oy,w,frac){
+  ctx.fillStyle='rgba(8,12,24,.92)'; ctx.fillRect(ox,oy,w,20);
+  ctx.strokeStyle='#1a2848'; ctx.lineWidth=.8; ctx.strokeRect(ox,oy,w,20);
+  const bc=frac>.65?'55,210,120':frac>.3?'240,178,48':'218,58,48';
+  ctx.fillStyle=`rgba(${bc},.88)`;
+  ctx.fillRect(ox+1,oy+1,Math.max(0,(w-2)*frac),18);
+  ctx.font='9px Segoe UI'; ctx.textAlign='left';
+  ctx.fillStyle='#4a6880'; ctx.fillText('Integridade da amostra',ox+5,oy+13);
+  ctx.textAlign='right'; ctx.fillStyle=`rgba(${bc},1)`;
+  ctx.fillText(`${Math.round(frac*100)} %`,ox+w-5,oy+13);
+}
+
+/* ── temp bar ───────────────────────────────────────── */
+function tempBar(ox,oy,frac){
+  const bw=12,bh=44;
+  ctx.fillStyle='rgba(6,10,22,.9)'; ctx.fillRect(ox-2,oy-bh-4,bw+36,bh+20);
+  const g=ctx.createLinearGradient(0,oy-bh,0,oy);
+  g.addColorStop(0,'#3a80ff'); g.addColorStop(.45,'#f5c842'); g.addColorStop(1,'#e85050');
+  ctx.fillStyle=g; ctx.fillRect(ox,oy-bh,bw,bh);
+  ctx.fillStyle='#050914'; ctx.fillRect(ox,oy-bh,bw,(bh-1)*frac);
+  ctx.strokeStyle='#182848'; ctx.lineWidth=.8; ctx.strokeRect(ox,oy-bh,bw,bh);
+  ctx.font='8px monospace'; ctx.fillStyle='#2a4060'; ctx.textAlign='left';
+  ctx.fillText('300K',ox+bw+4,oy-bh+5);
+  ctx.fillText('77K ',ox+bw+4,oy+3);
+}
+
+/* ── pre-generated molecules ────────────────────────── */
+const N=70;
+function rng(n){let x=Math.sin(n*127.1)*1e5; return x-Math.floor(x);}
+const mols=Array.from({length:N},(_,i)=>({
+  x : 0.05+rng(i*3  )*.90,
+  y : 0.05+rng(i*3+1)*.80,
+  ph: rng(i*3+2)*PI*2,
+  sp: 0.5+rng(i*7)*.9,
+  r : 4+rng(i*11)*2,
+  ang: rng(i*5)*PI*2,
+}));
+
+const NUCLEI=[{x:PW*.12,y:H*.25},{x:PW*.84,y:H*.82},{x:PW*.74,y:H*.11}];
+const CCX=PW/2, CCY=H/2+22;
+const FT=.300, FD=.038;
+
+/* ═══════════════════════════════════════════════════════
+   MAIN LOOP
+═══════════════════════════════════════════════════════ */
+function frame(now){
+  const t=(now%CYCLE)/CYCLE;
+  ctx.clearRect(0,0,W,H);
+
+  const crysT=sm(cl((t-.12)/.60,0,1));
+  const dmgT =sm2(cl((t-.40)/.48,0,1));
+  const flashT=cl((t-FT)/FD,0,1);
+  const frozen=t>FT+FD;
+  const glowT =sm(cl((t-FT-FD)/.14,0,1));
+
+  /* ── TITLE BAR ────────────────────────────────────── */
+  const tg=ctx.createLinearGradient(0,0,W,0);
+  tg.addColorStop(0,'#080f22'); tg.addColorStop(.5,'#0c1a2e'); tg.addColorStop(1,'#080f1e');
+  ctx.fillStyle=tg; ctx.fillRect(0,0,W,46);
+  ctx.font='bold 15.5px Segoe UI'; ctx.fillStyle='#6496be'; ctx.textAlign='center';
+  ctx.fillText('Por que congelar rápido é fundamental em Cryo-EM?',W/2,19);
+  ctx.font='11px Segoe UI'; ctx.fillStyle='#243850';
+  ctx.fillText('Comparação: congelamento lento (cristalino)  vs  ultra-rápido (vítreo, 77 K)',W/2,37);
+
+  /* ── BACKGROUNDS ──────────────────────────────────── */
+  const bg1=sm(crysT*.88);
+  ctx.fillStyle=`rgb(${lp(10,22,bg1)},${lp(14,38,bg1)},${lp(28,88,bg1)})`;
+  ctx.fillRect(0,46,PW,H-46);
+  ctx.fillStyle=frozen?'rgb(8,14,36)':'rgb(8,12,24)';
+  ctx.fillRect(PW,46,PW,H-46);
+  if(crysT>.02){
+    ctx.fillStyle=`rgba(175,218,255,${crysT*.18})`; ctx.fillRect(0,86,PW,H-86);
+  }
+  /* flash */
+  if(flashT>0&&flashT<1){
+    const fa=flashT<.5?flashT*2:(1-flashT)*2;
+    ctx.fillStyle=`rgba(100,224,255,${fa*.90})`; ctx.fillRect(PW,46,PW,H-46);
+  }
+  /* panel divider */
+  const dg=ctx.createLinearGradient(PW,46,PW,H);
+  dg.addColorStop(0,'rgba(20,40,80,0)'); dg.addColorStop(.25,'rgba(20,40,80,.7)');
+  dg.addColorStop(.75,'rgba(20,40,80,.7)'); dg.addColorStop(1,'rgba(20,40,80,0)');
+  ctx.strokeStyle=dg; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(PW,46); ctx.lineTo(PW,H); ctx.stroke();
+  ctx.font='bold 10px Segoe UI'; ctx.fillStyle='#182e4e';
+  ctx.textAlign='center'; ctx.fillText('VS',PW,H/2+6);
+
+  /* ════════════════════════════════════════════════════
+     LEFT — GELO CRISTALINO
+  ════════════════════════════════════════════════════ */
+
+  /* molecules (left) */
+  mols.forEach(m=>{
+    const bx=now*.0012*(crysT>.92?.06:1);
+    const damp=1-sm(crysT)*.82;
+    const ox=Math.sin(m.ph+bx*m.sp*2)*6*damp;
+    const oy=Math.cos(m.ph*1.3+bx*m.sp*1.6)*5*damp;
+    const mx=m.x*PW*.88+PW*.06+ox;
+    const my=m.y*(H-150)+88+oy;
+    const molAng=m.ang+(crysT>.75?0:now*.0008*m.sp);
+    drawMol(mx,my,molAng,m.r,.82,crysT>.75);
+  });
+
+  /* crystal hexagons */
+  if(crysT>.04){
+    const maxR=crysT*PW*1.05;
+    hexPts.forEach(h=>{
+      const px=h.x, py=h.y+88;
+      if(px<-HP||px>PW+HP||py<80||py>H+HP) return;
+      const dmin=Math.min(...NUCLEI.map(n=>Math.sqrt((px-n.x)**2+(py-(n.y+88))**2)));
+      if(dmin<maxR){
+        const lt=cl((maxR-dmin)/52,0,1);
+        drawHex(px,py,HR,`rgba(182,220,255,${lt*.17})`,`rgba(200,232,255,${lt*.65})`, .7);
+        /* H-bond vertex dots */
+        if(lt>.55){
+          for(let i=0;i<6;i++){
+            const a=PI/6+i*PI/3;
+            ctx.fillStyle=`rgba(200,232,255,${lt*.32})`;
+            ctx.beginPath(); ctx.arc(px+HR*Math.cos(a),py+HR*Math.sin(a),1.6,0,PI*2); ctx.fill();
+          }
+        }
+      }
+    });
+  }
+
+  /* expansion arrows */
+  if(crysT>.28&&crysT<.90){
+    const aa=sm((crysT-.28)/.62);
+    [[CCX-92,CCY],[CCX+92,CCY],[CCX,CCY-82],[CCX,CCY+82]].forEach(([ex,ey])=>{
+      const dx=ex-CCX, dy=ey-CCY;
+      const len=Math.sqrt(dx*dx+dy*dy), nx=dx/len, ny=dy/len;
+      const ex2=ex+nx*aa*22, ey2=ey+ny*aa*22;
+      ctx.strokeStyle=`rgba(175,218,255,${aa*.62})`; ctx.fillStyle=`rgba(175,218,255,${aa*.62})`;
+      ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(ex,ey); ctx.lineTo(ex2,ey2); ctx.stroke();
+      const ang=Math.atan2(ny,nx);
+      ctx.beginPath();
+      ctx.moveTo(ex2,ey2);
+      ctx.lineTo(ex2-8*Math.cos(ang-.4),ey2-8*Math.sin(ang-.4));
+      ctx.lineTo(ex2-8*Math.cos(ang+.4),ey2-8*Math.sin(ang+.4));
+      ctx.closePath(); ctx.fill();
+    });
+    if(aa>.5)
+      callout(CCX-52,CCY+88,104,[' ↔  expansão ~9%'],'175,218,255',aa*.9,10.5);
+  }
+
+  /* nucleation sparkle */
+  if(t>.09&&t<.22){
+    const sa=sm((t-.09)/.13);
+    NUCLEI.slice(0,2).forEach(n=>{
+      for(let r2=0;r2<8;r2++){
+        const a=r2/8*PI*2+now*.005;
+        ctx.strokeStyle=`rgba(210,245,255,${sa*.9})`; ctx.lineWidth=1.2;
+        ctx.beginPath();
+        ctx.moveTo(n.x+Math.cos(a)*3, n.y+88+Math.sin(a)*3);
+        ctx.lineTo(n.x+Math.cos(a)*14*sa, n.y+88+Math.sin(a)*14*sa); ctx.stroke();
+      }
+      ctx.fillStyle=`rgba(240,252,255,${sa})`;
+      ctx.beginPath(); ctx.arc(n.x,n.y+88,3*sa,0,PI*2); ctx.fill();
+    });
+  }
+
+  /* cell */
+  drawCell(CCX,CCY,dmgT);
+
+  /* cell labels (intro + outro) */
+  if(t<.16){
+    const la=sm(cl(1-(t-.10)/.06,0,1));
+    ctx.font='9.5px Segoe UI'; ctx.fillStyle=`rgba(108,162,228,${la*.82})`;
+    ctx.textAlign='left';
+    ctx.fillText('← Membrana celular',CCX+52,CCY-52);
+    ctx.fillText('← Núcleo',CCX+28,CCY+6);
+    ctx.strokeStyle=`rgba(88,140,215,${la*.35})`; ctx.lineWidth=.8; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(CCX+52,CCY-52); ctx.lineTo(CCX+42,CCY-55); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  /* callouts */
+  if(crysT>.26&&crysT<.56){
+    const ca=sm(cl((crysT-.26)/.12,0,1))*sm(cl(1-(crysT-.43)/.13,0,1));
+    callout(8,H-140,218,
+      ['Cristais crescem a partir de','núcleos de cristalização.',
+       'A rede hexagonal do gelo Ih','expande ~9% do volume da água.'],
+      '175,210,255',ca,10.5);
+  }
+  if(dmgT>.38&&t<.95){
+    const ca=sm(cl((dmgT-.38)/.14,0,1));
+    callout(8,H-110,218,
+      ['A expansão rompe a membrana.','Conteúdo celular é perdido!'],
+      '225,68,52',ca,11);
+  }
+
+  /* H₂O hint (beginning) */
+  if(t<.12){
+    const la=sm(cl(1-(t-.06)/.06,0,1));
+    ctx.font='bold 10px Segoe UI'; ctx.fillStyle=`rgba(90,148,230,${la*.70})`;
+    ctx.textAlign='left'; ctx.fillText('H₂O',20,100);
+    ctx.font='9px Segoe UI'; ctx.fillStyle=`rgba(70,120,200,${la*.55})`;
+    ctx.fillText('moléculas de água',38,100);
+  }
+
+  /* panel header left */
+  const lhg=ctx.createLinearGradient(0,46,PW,46);
+  lhg.addColorStop(0,'#0c1830'); lhg.addColorStop(1,'#0a1220');
+  ctx.fillStyle=lhg; ctx.fillRect(0,46,PW,40);
+  ctx.font='bold 16px Segoe UI'; ctx.fillStyle='#7ab2de'; ctx.textAlign='center';
+  ctx.fillText('❄  Gelo Cristalino',PW/2,65);
+  ctx.font='10.5px Segoe UI'; ctx.fillStyle='#2e4e6a';
+  ctx.fillText('Resfriamento lento  (~1 K/s)  —  rede hexagonal rígida (Ice Ih)',PW/2,81);
+
+  /* phase badge left */
+  const phasesL=[
+    [0,.12,'LÍQUIDO','55,130,220'],
+    [.12,.38,'NUCLEAÇÃO','190,165,38'],
+    [.38,.62,'CRISTALIZANDO','205,118,28'],
+    [.62,1.0,'DANIFICADO','212,48,38'],
+  ];
+  phasesL.forEach(([t0,t1,lbl,c])=>{
+    if(t>=t0&&t<t1) phaseBadge(8,90,lbl,c,1);
+  });
+
+  /* status left */
+  [
+    [0,.12,'Moléculas H₂O em movimento livre','55,136,220'],
+    [.12,.38,'⚠  Núcleos de cristalização formando…','230,200,50'],
+    [.38,.62,'⚠  Gelo expande — pressão sobre a célula','240,138,38'],
+    [.62, 1,'✗  Cristais rompem as estruturas celulares!','218,52,40'],
+  ].forEach(([t0,t1,msg,c])=>{
+    if(t>=t0&&t<t1){
+      ctx.font='bold 11.5px Segoe UI'; ctx.fillStyle=`rgba(${c},1)`;
+      ctx.textAlign='center'; ctx.fillText(msg,PW/2,H-32);
+    }
+  });
+
+  integrityBar(10,H-20,PW-20, cl(1-sm2(cl((t-.38)/.52,0,1))*.95,0,1));
+  tempBar(PW-56,H-50, cl(1-crysT*.96,0,1));
+
+  /* ════════════════════════════════════════════════════
+     RIGHT — GELO VÍTREO
+  ════════════════════════════════════════════════════ */
+
+  /* molecules (right) */
+  const tRef=frozen?FT*CYCLE:now;
+  mols.forEach(m=>{
+    const bx=tRef*.0012;
+    const ox=Math.sin(m.ph+bx*m.sp*2)*6;
+    const oy=Math.cos(m.ph*1.3+bx*m.sp*1.6)*5;
+    const mx=PW+m.x*PW*.88+PW*.06+ox;
+    const my=m.y*(H-150)+88+oy;
+    const molAng=m.ang+(frozen?0:now*.0008*m.sp);
+    drawMol(mx,my,molAng,m.r,.80,frozen);
+  });
+
+  /* amorphous bond lines */
+  if(frozen&&glowT>.38){
+    const fa=(glowT-.38)/.62;
+    ctx.strokeStyle=`rgba(88,148,215,${fa*.15})`; ctx.lineWidth=.6;
+    mols.forEach((a2,i)=>{
+      const ax=PW+a2.x*PW*.88+PW*.06, ay=a2.y*(H-150)+88;
+      mols.slice(i+1,i+9).forEach(b2=>{
+        const bx2=PW+b2.x*PW*.88+PW*.06, by2=b2.y*(H-150)+88;
+        const d=Math.sqrt((ax-bx2)**2+(ay-by2)**2);
+        if(d<40){ ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx2,by2); ctx.stroke(); }
+      });
+    });
+  }
+
+  /* cell */
+  drawCell(PW+PW/2, CCY, frozen ? -glowT : 0);
+
+  /* SNAP! */
+  if(flashT>.07&&flashT<.93){
+    const fa=flashT<.5?flashT*2:(1-flashT)*2;
+    /* ripple rings */
+    for(let ri=0;ri<3;ri++){
+      const rr=(1-fa)*80+ri*28;
+      ctx.strokeStyle=`rgba(140,240,255,${fa*.32*(1-ri*.28)})`;
+      ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(PW+PW/2,CCY,rr,0,PI*2); ctx.stroke();
+    }
+    ctx.font=`bold ${Math.round(lp(20,48,fa))}px Segoe UI`;
+    ctx.fillStyle=`rgba(255,255,255,${fa*.96})`;
+    ctx.textAlign='center'; ctx.fillText('SNAP! ⚡',PW+PW/2,CCY+10);
+  }
+
+  /* cell labels vitreous (intro) */
+  if(t<.16){
+    const la=sm(cl(1-(t-.10)/.06,0,1));
+    ctx.font='9.5px Segoe UI'; ctx.fillStyle=`rgba(108,162,228,${la*.82})`;
+    ctx.textAlign='left';
+    ctx.fillText('← Membrana celular',PW+PW/2+52-PW,CCY-52);
+    ctx.fillText('← Núcleo',PW+PW/2+28-PW,CCY+6);
+  }
+
+  /* callouts vitreous */
+  if(glowT>.38&&glowT<.96){
+    const ca=sm(cl((glowT-.38)/.10,0,1));
+    callout(PW+8,H-128,218,
+      ['Moléculas congelam exatamente','onde estão (estrutura amorfa).',
+       'Sem cristais = sem expansão','= sem dano à célula!'],
+      '42,210,105',ca,10.5);
+  }
+
+  /* H₂O hint right */
+  if(t<.12){
+    const la=sm(cl(1-(t-.06)/.06,0,1));
+    ctx.font='bold 10px Segoe UI'; ctx.fillStyle=`rgba(90,148,230,${la*.70})`;
+    ctx.textAlign='left'; ctx.fillText('H₂O',PW+20,100);
+    ctx.font='9px Segoe UI'; ctx.fillStyle=`rgba(70,120,200,${la*.55})`;
+    ctx.fillText('moléculas de água',PW+38,100);
+  }
+
+  /* panel header right */
+  const rhg=ctx.createLinearGradient(PW,46,W,46);
+  rhg.addColorStop(0,'#081420'); rhg.addColorStop(1,'#082018');
+  ctx.fillStyle=rhg; ctx.fillRect(PW,46,PW,40);
+  ctx.font='bold 16px Segoe UI'; ctx.fillStyle='#32d0a0'; ctx.textAlign='center';
+  ctx.fillText('❄  Gelo Vítreo  (77 K)',PW+PW/2,65);
+  ctx.font='10.5px Segoe UI'; ctx.fillStyle='#154830';
+  ctx.fillText('Resfriamento ultra-rápido  (~10⁶ K/s)  —  estrutura amorfa',PW+PW/2,81);
+
+  /* phase badge right */
+  [
+    [0,FT,'LÍQUIDO','55,130,220'],
+    [FT,FT+FD,'CRIOPRESERVANDO','0,222,222'],
+    [FT+FD,1,'PRESERVADO','38,212,100'],
+  ].forEach(([t0,t1,lbl,c])=>{
+    if(t>=t0&&t<t1) phaseBadge(PW+8,90,lbl,c,1);
+  });
+
+  /* status right */
+  [
+    [0,FT,'Moléculas H₂O em movimento livre','55,136,220'],
+    [FT,FT+FD,'⚡  Congelamento instantâneo!','0,232,232'],
+    [FT+FD,1,'✓  Estrutura perfeitamente preservada!','38,215,100'],
+  ].forEach(([t0,t1,msg,c])=>{
+    if(t>=t0&&t<t1){
+      ctx.font='bold 11.5px Segoe UI'; ctx.fillStyle=`rgba(${c},1)`;
+      ctx.textAlign='center'; ctx.fillText(msg,PW+PW/2,H-32);
+    }
+  });
+
+  integrityBar(PW+10,H-20,PW-20, frozen?1:.99);
+  tempBar(W-56,H-50, frozen?0:cl(1-(t/FT)*.04,0,1)*.98);
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

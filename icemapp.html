@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>IceMAPP — Mockup</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg:      #0f1424;
+  --panel:   #161c2e;
+  --panel2:  #1c2338;
+  --border:  #253050;
+  --accent:  #2ac8c8;
+  --text:    #d2e4e4;
+  --text2:   #6a8898;
+  --text3:   #374860;
+  --green:   #38d488;
+  --yellow:  #f5c842;
+  --red:     #e85555;
+}
+
+*{ margin:0; padding:0; box-sizing:border-box; }
+html,body{
+  min-height:100vh; background:#080c18;
+  display:flex; justify-content:center; align-items:center;
+  font-family:'Inter','Segoe UI',Arial,sans-serif;
+}
+
+/* ── App window ── */
+.app{
+  width:1180px; height:660px;
+  background:var(--bg);
+  border-radius:13px; overflow:hidden;
+  box-shadow:0 32px 90px #000000a0, 0 0 0 1px #ffffff0a;
+  display:flex; flex-direction:column;
+}
+
+/* ── Title bar ── */
+.titlebar{
+  height:38px; background:#0c1020; flex-shrink:0;
+  display:flex; align-items:center; padding:0 16px;
+  border-bottom:1px solid var(--border); gap:10px;
+}
+.tls{ display:flex; gap:7px; }
+.tl{ width:13px; height:13px; border-radius:50%; }
+.tl.r{background:#ff5f57;} .tl.y{background:#febc2e;} .tl.g{background:#28c840;}
+.menubar{ display:flex; gap:0; margin-left:16px; }
+.menubar span{
+  font-size:12px; color:var(--text2); padding:0 11px; cursor:default;
+}
+.menubar span:hover{ color:var(--text); }
+.wintitle{
+  flex:1; text-align:center; font-size:12px; font-weight:600;
+  color:var(--text3); letter-spacing:.05em;
+}
+
+/* ── Body ── */
+.body{ flex:1; display:flex; overflow:hidden; }
+
+/* ── Left sidebar ── */
+.left{
+  width:188px; flex-shrink:0; background:var(--panel);
+  border-right:1px solid var(--border);
+  overflow-y:auto; display:flex; flex-direction:column; padding-bottom:8px;
+}
+.sec{
+  padding:9px 12px 5px; font-size:9px; font-weight:700;
+  color:var(--accent); letter-spacing:.14em; text-transform:uppercase;
+  border-bottom:1px solid var(--border); margin-bottom:3px;
+}
+.file-card{
+  margin:7px 10px; background:var(--panel2);
+  border:1px solid var(--border); border-radius:8px; padding:8px 10px;
+}
+.fname{ font-size:12px; font-weight:600; color:var(--text); }
+.fmeta{ font-size:10px; color:var(--text2); margin-top:2px; }
+.ftag{
+  display:inline-block; margin-top:5px;
+  background:#142030; color:var(--accent);
+  font-size:9px; font-weight:700; padding:2px 6px; border-radius:3px; letter-spacing:.06em;
+}
+.prow{
+  display:flex; justify-content:space-between; align-items:center;
+  padding:4px 12px;
+}
+.plabel{ font-size:11px; color:var(--text2); font-family:'JetBrains Mono',monospace; }
+.pval{
+  font-size:11px; font-weight:600; color:var(--text);
+  font-family:'JetBrains Mono',monospace;
+  background:var(--panel2); border:1px solid var(--border);
+  padding:2px 5px; border-radius:4px; min-width:58px; text-align:right;
+}
+.btn-run{
+  margin:9px 10px 3px; background:var(--accent); color:#04181c;
+  border:none; border-radius:7px; padding:9px 0; width:calc(100% - 20px);
+  font-size:11.5px; font-weight:700; letter-spacing:.05em; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; gap:6px;
+}
+.btn-run::before{ content:''; width:8px; height:8px; border-radius:50%; background:#04181c; opacity:.6; }
+.roi{
+  display:flex; align-items:center; gap:8px; padding:5px 12px; cursor:default;
+}
+.roi-dot{ width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.roi-name{ font-size:11.5px; color:var(--text); }
+.roi-sub{ font-size:10px; color:var(--text3); margin-left:auto; }
+
+/* ── Center ── */
+.center{
+  flex:1; background:var(--bg);
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  padding:10px 14px; gap:6px;
+}
+.map-label{
+  font-size:10.5px; color:var(--text2); letter-spacing:.06em;
+  text-transform:uppercase; text-align:center;
+}
+.tabs{
+  display:flex; gap:3px; background:var(--panel2);
+  border-radius:8px; padding:3px; border:1px solid var(--border);
+}
+.tab{
+  flex:1; padding:5px 18px; font-size:11px; font-weight:600;
+  border:none; border-radius:6px; cursor:pointer; letter-spacing:.03em;
+  background:transparent; color:var(--text2);
+  font-family:'Inter','Segoe UI',sans-serif; transition:background .15s,color .15s;
+}
+.tab.active{ background:var(--accent); color:#04181c; }
+
+/* ── Right sidebar ── */
+.right{
+  width:264px; flex-shrink:0; background:var(--panel);
+  border-left:1px solid var(--border);
+  overflow-y:auto; display:flex; flex-direction:column; padding-bottom:8px;
+}
+.stat-card{
+  margin:5px 10px; background:var(--panel2);
+  border:1px solid var(--border); border-radius:8px; padding:9px 11px;
+}
+.stat-big-label{ font-size:9.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--text2); margin-bottom:2px; }
+.stat-big{ font-size:24px; font-weight:700; color:var(--text); font-family:'JetBrains Mono',monospace; line-height:1; }
+.stat-big .u{ font-size:13px; font-weight:400; color:var(--text2); }
+.srow{
+  display:flex; justify-content:space-between; padding:3px 0;
+}
+.srow-l{ font-size:11px; color:var(--text2); }
+.srow-v{ font-size:11px; font-weight:600; color:var(--text); font-family:'JetBrains Mono',monospace; }
+
+.qrow{
+  display:flex; align-items:center; gap:8px; padding:4px 12px;
+}
+.qbadge{ width:8px; height:8px; border-radius:2px; flex-shrink:0; }
+.qlabel{ font-size:11px; color:var(--text2); }
+.qval{ font-size:11px; font-weight:700; margin-left:auto; font-family:'JetBrains Mono',monospace; }
+.qval.ok{color:var(--green);} .qval.warn{color:var(--yellow);} .qval.bad{color:var(--red);}
+
+.pbar-wrap{ margin:4px 12px; }
+.pbar-head{
+  display:flex; justify-content:space-between;
+  font-size:10.5px; margin-bottom:3px;
+}
+.pbar-track{
+  height:7px; background:var(--panel2); border-radius:4px;
+  border:1px solid var(--border); overflow:hidden;
+}
+.pbar-fill{ height:100%; border-radius:3px; }
+
+.exprow{
+  display:flex; gap:5px; margin:5px 10px;
+}
+.expbtn{
+  flex:1; background:var(--panel2); border:1px solid var(--border);
+  border-radius:6px; padding:6px 0; text-align:center;
+  font-size:10.5px; font-weight:600; color:var(--text2); cursor:pointer;
+}
+.expbtn:hover{ color:var(--accent); border-color:var(--accent); }
+
+/* ── Status bar ── */
+.statusbar{
+  height:27px; background:#0c1020; flex-shrink:0;
+  border-top:1px solid var(--border);
+  display:flex; align-items:center; padding:0 14px; gap:0;
+}
+.si{
+  font-size:10.5px; color:var(--text3); padding:0 12px;
+  border-right:1px solid var(--border);
+}
+.si:first-child{padding-left:0;}
+.si.ok{color:var(--green);} .si.acc{color:var(--accent);}
+
+canvas{ display:block; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Titlebar -->
+  <div class="titlebar">
+    <div class="tls"><div class="tl r"></div><div class="tl y"></div><div class="tl g"></div></div>
+    <div class="menubar">
+      <span>Arquivo</span><span>Processar</span><span>Visualizar</span><span>Exportar</span><span>Ajuda</span>
+    </div>
+    <div class="wintitle">IceMAPP — Cryo Ice Thickness Mapper &nbsp;v0.2-alpha</div>
+  </div>
+
+  <!-- Body -->
+  <div class="body">
+
+    <!-- LEFT -->
+    <div class="left">
+      <div class="sec">Arquivo</div>
+      <div class="file-card">
+        <div class="fname">grid_cryo_01</div>
+        <div class="fmeta">HDF5 · 512 × 512 px</div>
+        <div class="fmeta">CNPEM · 2026-06-10</div>
+        <div class="ftag">WLRS · 400–850 nm</div>
+      </div>
+
+      <div class="sec" style="margin-top:5px">Parâmetros</div>
+      <div class="prow"><span class="plabel">n₂</span><span class="pval">1.3100</span></div>
+      <div class="prow"><span class="plabel">λ<sub>min</sub></span><span class="pval">400 nm</span></div>
+      <div class="prow"><span class="plabel">λ<sub>max</sub></span><span class="pval">850 nm</span></div>
+      <div class="prow"><span class="plabel">pts/px</span><span class="pval">512</span></div>
+      <div class="prow"><span class="plabel">SNR min</span><span class="pval">6 dB</span></div>
+      <div class="btn-run">Analisar Grade</div>
+
+      <div class="sec" style="margin-top:7px">Regiões (ROI)</div>
+      <div class="roi">
+        <div class="roi-dot" style="background:#2ac8c8"></div>
+        <span class="roi-name">ROI-1</span><span class="roi-sub">centro</span>
+      </div>
+      <div class="roi">
+        <div class="roi-dot" style="background:#f5c842"></div>
+        <span class="roi-name">ROI-2</span><span class="roi-sub">borda</span>
+      </div>
+      <div class="roi">
+        <div class="roi-dot" style="background:#e85555"></div>
+        <span class="roi-name">ROI-3</span><span class="roi-sub">anomalia</span>
+      </div>
+    </div>
+
+    <!-- CENTER -->
+    <div class="center">
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('thickness',this)">Espessura d(x, y)</button>
+        <button class="tab" onclick="switchTab('hologram',this)">◈ Holografia 2D</button>
+      </div>
+      <div id="map-label" class="map-label">Mapa de Espessura — d(x, y) [nm] · Colormap Plasma</div>
+      <canvas id="map"  width="464" height="380"></canvas>
+      <canvas id="holo" width="464" height="380" style="display:none"></canvas>
+      <canvas id="cbar" width="464" height="22"></canvas>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="right">
+      <div class="sec">Estatísticas</div>
+
+      <div class="stat-card">
+        <div class="stat-big-label">Espessura média</div>
+        <div class="stat-big">5842 <span class="u">nm</span></div>
+      </div>
+
+      <div class="stat-card">
+        <div class="srow"><span class="srow-l">Desvio padrão (σ)</span><span class="srow-v">412 nm</span></div>
+        <div class="srow"><span class="srow-l">Mínimo</span><span class="srow-v">4.980 µm</span></div>
+        <div class="srow"><span class="srow-l">Máximo</span><span class="srow-v">6.820 µm</span></div>
+        <div class="srow"><span class="srow-l">Mediana</span><span class="srow-v">5.790 µm</span></div>
+      </div>
+
+      <div class="sec" style="margin-top:3px">Distribuição</div>
+      <div style="margin:5px 10px">
+        <canvas id="hist" width="234" height="76"></canvas>
+      </div>
+
+      <div class="sec" style="margin-top:3px">Qualidade do Sinal</div>
+      <div class="qrow">
+        <div class="qbadge" style="background:#38d488"></div>
+        <span class="qlabel">Pixels válidos</span>
+        <span class="qval ok">93.4 %</span>
+      </div>
+      <div class="qrow">
+        <div class="qbadge" style="background:#2ac8c8"></div>
+        <span class="qlabel">SNR médio</span>
+        <span class="qval ok">11.2 dB</span>
+      </div>
+      <div class="qrow">
+        <div class="qbadge" style="background:#6a8898"></div>
+        <span class="qlabel">Cobertura</span>
+        <span class="qval ok">98.1 %</span>
+      </div>
+
+      <div class="sec" style="margin-top:5px">Critério NB-4 (5–7 µm)</div>
+      <div class="pbar-wrap">
+        <div class="pbar-head">
+          <span style="color:#38d488;font-weight:600">✓ Faixa ideal</span>
+          <span style="color:#38d488;font-weight:700">89.2 %</span>
+        </div>
+        <div class="pbar-track">
+          <div class="pbar-fill" style="width:89.2%;background:linear-gradient(90deg,#1a9a60,#38d488)"></div>
+        </div>
+      </div>
+      <div class="pbar-wrap" style="margin-top:5px">
+        <div class="pbar-head">
+          <span style="color:#f5c842">⚠ Muito espesso</span>
+          <span style="color:#f5c842;font-weight:700">6.4 %</span>
+        </div>
+        <div class="pbar-track">
+          <div class="pbar-fill" style="width:6.4%;background:#f5c842"></div>
+        </div>
+      </div>
+      <div class="pbar-wrap" style="margin-top:5px">
+        <div class="pbar-head">
+          <span style="color:#e85555">✗ Muito fino</span>
+          <span style="color:#e85555;font-weight:700">4.4 %</span>
+        </div>
+        <div class="pbar-track">
+          <div class="pbar-fill" style="width:4.4%;background:#e85555"></div>
+        </div>
+      </div>
+
+      <div class="sec" style="margin-top:6px">Exportar</div>
+      <div class="exprow">
+        <div class="expbtn">PNG</div>
+        <div class="expbtn">CSV</div>
+        <div class="expbtn">HDF5</div>
+        <div class="expbtn">TIFF</div>
+      </div>
+    </div>
+
+  </div><!-- body -->
+
+  <!-- Status bar -->
+  <div class="statusbar">
+    <div class="si ok">✓ Calibrado</div>
+    <div class="si">512 × 512 px</div>
+    <div class="si">26 214 pontos</div>
+    <div class="si acc">WLRS + FFT</div>
+    <div class="si">n₂ = 1.3100</div>
+    <div class="si" style="margin-left:auto;border-right:none;border-left:1px solid var(--border)">CNPEM / LNLS</div>
+  </div>
+
+</div><!-- app -->
+
+<script>
+/* ─── Plasma colormap ─────────────────────────────────── */
+const PL = [
+  [13,8,135],[46,3,161],[84,2,163],[113,1,152],[139,10,165],
+  [163,21,156],[185,50,137],[206,74,116],[219,92,104],[236,112,86],
+  [244,136,73],[250,159,58],[253,188,43],[252,214,35],[240,249,33]
+];
+function plasma(t){
+  t = Math.max(0, Math.min(1, t));
+  const n = PL.length-1, lo = Math.floor(t*n), hi = Math.min(lo+1,n), f = t*n-lo;
+  return [PL[lo][0]+(PL[hi][0]-PL[lo][0])*f,
+          PL[lo][1]+(PL[hi][1]-PL[lo][1])*f,
+          PL[lo][2]+(PL[hi][2]-PL[lo][2])*f].map(Math.round);
+}
+
+/* ─── 2D Thickness Map ────────────────────────────────── */
+function drawMap(){
+  const cv = document.getElementById('map');
+  const ctx = cv.getContext('2d');
+  const W=cv.width, H=cv.height, cx=W/2, cy=H/2, R=Math.min(W,H)*0.47;
+  const D0=4600, D1=7300;
+  const PITCH=15, HOLE_R=5;
+  const img = ctx.createImageData(W,H);
+  const d = img.data;
+
+  function noise(x,y){
+    return Math.sin(x*.016+1.2)*Math.cos(y*.014-.8)*.40
+          +Math.sin(x*.009-y*.011+.5)*.32
+          +Math.cos(x*.022+y*.018-1.4)*.28;
+  }
+  function isHole(x,y){
+    const lx=((x-cx)%PITCH+PITCH)%PITCH - PITCH/2;
+    const ly=((y-cy)%PITCH+PITCH)%PITCH - PITCH/2;
+    return lx*lx+ly*ly < HOLE_R*HOLE_R;
+  }
+
+  for(let y=0;y<H;y++){
+    for(let x=0;x<W;x++){
+      const i=(y*W+x)*4;
+      const dx=x-cx, dy=y-cy, r=Math.sqrt(dx*dx+dy*dy);
+      if(r>R+1){ d[i]=12;d[i+1]=16;d[i+2]=30;d[i+3]=255; continue; }
+      const n=noise(x,y);
+      let t;
+      if(isHole(x,y) && r<R-HOLE_R-2){
+        const depth = 4700 + n*220;
+        t=(depth-D0)/(D1-D0);
+        t=Math.max(0,Math.min(.3,t));
+      } else {
+        const rn=r/R;
+        const thickness = 5300 + 1200*rn*rn + n*460;
+        t=(thickness-D0)/(D1-D0);
+      }
+      const [cr,cg,cb]=plasma(t);
+      d[i]=cr;d[i+1]=cg;d[i+2]=cb;d[i+3]=255;
+    }
+  }
+  ctx.putImageData(img,0,0);
+
+  /* grid circle border */
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2);
+  ctx.strokeStyle='#2ac8c840'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.restore();
+
+  /* ROI overlays */
+  ctx.save(); ctx.setLineDash([4,3]); ctx.lineWidth=1.8;
+  const rois=[
+    {x:cx,    y:cy,     r:58,  c:'#2ac8c8', label:'ROI-1', lx:62,  ly:-12},
+    {x:cx+108,y:cy-75,  r:42,  c:'#f5c842', label:'ROI-2', lx:46,  ly:-6},
+    {x:cx-108,y:cy+88,  r:24,  c:'#e85555', label:'ROI-3', lx:27,  ly:-5},
+  ];
+  rois.forEach(q=>{
+    ctx.strokeStyle=q.c+'cc';
+    ctx.beginPath(); ctx.arc(q.x,q.y,q.r,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle=q.c+'cc';
+    ctx.font='10px Inter'; ctx.fillText(q.label, q.x+q.lx, q.y+q.ly);
+  });
+  ctx.restore();
+
+  /* scale bar */
+  ctx.save();
+  const bx=cx+R-74, by=cy+R-20;
+  ctx.fillStyle='#00000099'; ctx.beginPath();
+  roundRect(ctx,bx-4,by-13,68,18,3); ctx.fill();
+  ctx.strokeStyle='white'; ctx.lineWidth=1.8; ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(bx+54,by); ctx.stroke();
+  ctx.lineWidth=1;
+  [[bx,by],[bx+54,by]].forEach(([px,py])=>{
+    ctx.beginPath(); ctx.moveTo(px,py-4); ctx.lineTo(px,py+4); ctx.stroke();
+  });
+  ctx.font='9px Inter'; ctx.fillStyle='white';
+  ctx.textAlign='center'; ctx.fillText('50 µm',bx+27,by-1);
+  ctx.restore();
+}
+
+/* ─── Colorbar ────────────────────────────────────────── */
+function drawColorbar(){
+  const cv=document.getElementById('cbar');
+  const ctx=cv.getContext('2d');
+  const W=cv.width, BX=28, BW=W-80, BY=3, BH=9;
+  const grd=ctx.createLinearGradient(BX,0,BX+BW,0);
+  for(let i=0;i<=30;i++){ const t=i/30; const [r,g,b]=plasma(t); grd.addColorStop(t,`rgb(${r},${g},${b})`); }
+  ctx.fillStyle=grd;
+  ctx.beginPath(); roundRect(ctx,BX,BY,BW,BH,2); ctx.fill();
+  ctx.strokeStyle='#253050'; ctx.lineWidth=.8;
+  ctx.beginPath(); roundRect(ctx,BX,BY,BW,BH,2); ctx.stroke();
+
+  /* ideal zone markers */
+  const D0=4600,D1=7300;
+  const x5=BX+BW*(5000-D0)/(D1-D0), x7=BX+BW*(7000-D0)/(D1-D0);
+  ctx.strokeStyle='#38d48880'; ctx.lineWidth=1; ctx.setLineDash([2,2]);
+  [x5,x7].forEach(xx=>{ ctx.beginPath(); ctx.moveTo(xx,BY-1); ctx.lineTo(xx,BY+BH+1); ctx.stroke(); });
+  ctx.setLineDash([]);
+
+  ctx.font='9.5px "JetBrains Mono",monospace'; ctx.fillStyle='#6a8898';
+  const lbls=[['4.6 µm',0,'left'],['5.5 µm',.35,'center'],['6.5 µm',.72,'center'],['7.3 µm',1,'right']];
+  lbls.forEach(([t,pos,al])=>{ ctx.textAlign=al; ctx.fillText(t,BX+BW*pos,cv.height-1); });
+}
+
+/* ─── Histogram ──────────────────────────────────────── */
+function drawHistogram(){
+  const cv=document.getElementById('hist');
+  const ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height, BINS=36, BL=14;
+  ctx.clearRect(0,0,W,H);
+  const h=[];
+  for(let i=0;i<BINS;i++){
+    const x=i/BINS;
+    h.push(.72*Math.exp(-((x-.50)**2)/(2*.07**2))
+           +.22*Math.exp(-((x-.34)**2)/(2*.055**2))
+           +.04*Math.random());
+  }
+  const peak=Math.max(...h), bw=W/BINS;
+  for(let i=0;i<BINS;i++){
+    const t=i/BINS;
+    const [r,g,b]=plasma(t);
+    const bh=(h[i]/peak)*(H-BL);
+    ctx.fillStyle=`rgb(${r},${g},${b})`;
+    ctx.fillRect(i*bw,H-BL-bh,bw-1,bh);
+  }
+  ctx.strokeStyle='#253050'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,H-BL); ctx.lineTo(W,H-BL); ctx.stroke();
+
+  const D0=4600,D1=7300;
+  const x5=W*(5000-D0)/(D1-D0), x7=W*(7000-D0)/(D1-D0);
+  ctx.fillStyle='#38d48814';
+  ctx.fillRect(x5,0,x7-x5,H-BL);
+  ctx.strokeStyle='#38d48850'; ctx.lineWidth=1; ctx.setLineDash([2,2]);
+  [x5,x7].forEach(xx=>{ ctx.beginPath(); ctx.moveTo(xx,0); ctx.lineTo(xx,H-BL); ctx.stroke(); });
+  ctx.setLineDash([]);
+
+  ctx.font='9px "JetBrains Mono",monospace'; ctx.fillStyle='#374860';
+  ctx.textAlign='left';   ctx.fillText('4.6',0,H-2);
+  ctx.textAlign='center'; ctx.fillText('6.0 µm',W/2,H-2);
+  ctx.textAlign='right';  ctx.fillText('7.3',W,H-2);
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+
+/* ─── Holographic interferogram ──────────────────────── */
+function drawHologram(){
+  const cv = document.getElementById('holo');
+  const ctx = cv.getContext('2d');
+  const W=cv.width, H=cv.height, cx=W/2, cy=H/2, R=Math.min(W,H)*0.47;
+  const n2=1.31, PI=Math.PI;
+  const PITCH=15, HOLE_R=5;
+
+  function noise(x,y){
+    return Math.sin(x*.016+1.2)*Math.cos(y*.014-.8)*.40
+          +Math.sin(x*.009-y*.011+.5)*.32
+          +Math.cos(x*.022+y*.018-1.4)*.28;
+  }
+  function isHole(x,y){
+    const lx=((x-cx)%PITCH+PITCH)%PITCH-PITCH/2;
+    const ly=((y-cy)%PITCH+PITCH)%PITCH-PITCH/2;
+    return lx*lx+ly*ly < HOLE_R*HOLE_R;
+  }
+  function refl(d, lam){ return 0.5+0.5*Math.cos(4*PI*n2*d/lam+PI); }
+
+  const img = ctx.createImageData(W,H);
+  const dat = img.data;
+
+  for(let y=0;y<H;y++){
+    for(let x=0;x<W;x++){
+      const idx=(y*W+x)*4;
+      const dx=x-cx, dy=y-cy, r=Math.sqrt(dx*dx+dy*dy);
+      if(r>R+1){ dat[idx]=12;dat[idx+1]=16;dat[idx+2]=30;dat[idx+3]=255; continue; }
+
+      const n=noise(x,y);
+      let d;
+      if(isHole(x,y) && r<R-HOLE_R-2){
+        d = 4700 + n*220;
+      } else {
+        const rn=r/R;
+        d = 5300 + 1200*rn*rn + n*460;
+      }
+
+      /* thin-film interference RGB — r(λ) = ½ + ½·cos(4πn₂d/λ + π) */
+      const rR = refl(d, 650);
+      const rG = refl(d, 532);
+      const rB = refl(d, 450);
+
+      /* boost contrast: subtract mean, amplify */
+      const avg = (rR+rG+rB)/3;
+      const boost = 1.6;
+      dat[idx]   = Math.round(Math.max(0,Math.min(255,(avg+(rR-avg)*boost)*255)));
+      dat[idx+1] = Math.round(Math.max(0,Math.min(255,(avg+(rG-avg)*boost)*255)));
+      dat[idx+2] = Math.round(Math.max(0,Math.min(255,(avg+(rB-avg)*boost)*255)));
+      dat[idx+3] = 255;
+    }
+  }
+  ctx.putImageData(img,0,0);
+
+  /* circle border */
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2);
+  ctx.strokeStyle='#ffffff22'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.restore();
+
+  /* ROI overlays */
+  ctx.save(); ctx.setLineDash([4,3]); ctx.lineWidth=1.8;
+  const rois=[
+    {x:cx,    y:cy,    r:58, c:'#2ac8c8', label:'ROI-1', lx:62, ly:-12},
+    {x:cx+108,y:cy-75, r:42, c:'#f5c842', label:'ROI-2', lx:46, ly:-6},
+    {x:cx-108,y:cy+88, r:24, c:'#e85555', label:'ROI-3', lx:27, ly:-5},
+  ];
+  rois.forEach(q=>{
+    ctx.strokeStyle=q.c+'cc';
+    ctx.beginPath(); ctx.arc(q.x,q.y,q.r,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle=q.c+'cc'; ctx.font='10px Inter';
+    ctx.fillText(q.label, q.x+q.lx, q.y+q.ly);
+  });
+  ctx.restore();
+
+  /* scale bar */
+  ctx.save();
+  const bx=cx+R-74, by=cy+R-20;
+  ctx.fillStyle='#00000099'; ctx.beginPath();
+  roundRect(ctx,bx-4,by-13,68,18,3); ctx.fill();
+  ctx.strokeStyle='white'; ctx.lineWidth=1.8; ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(bx+54,by); ctx.stroke();
+  [[bx,by],[bx+54,by]].forEach(([px,py])=>{
+    ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(px,py-4); ctx.lineTo(px,py+4); ctx.stroke();
+  });
+  ctx.font='9px Inter'; ctx.fillStyle='white';
+  ctx.textAlign='center'; ctx.fillText('50 µm',bx+27,by-1);
+  ctx.restore();
+
+  /* legend */
+  ctx.save();
+  ctx.fillStyle='#00000099';
+  ctx.beginPath(); roundRect(ctx, cx-R+8, cy+R-54, 168, 40, 5); ctx.fill();
+  ctx.font='9px Inter'; ctx.fillStyle='#8aaaaa';
+  ctx.textAlign='left';
+  ctx.fillText('Interferograma: r(x,y,λ)', cx-R+14, cy+R-40);
+  ctx.fillText('r = ½ + ½·cos(4πn₂d/λ + π)', cx-R+14, cy+R-26);
+  ctx.fillText('λ_R=650 · λ_G=532 · λ_B=450 nm', cx-R+14, cy+R-14);
+  ctx.restore();
+}
+
+/* ─── Tab switch ──────────────────────────────────────── */
+function switchTab(type, btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  const mapCv  = document.getElementById('map');
+  const holoCv = document.getElementById('holo');
+  const label  = document.getElementById('map-label');
+  if(type==='thickness'){
+    mapCv.style.display='block'; holoCv.style.display='none';
+    label.textContent='Mapa de Espessura — d(x, y) [nm] · Colormap Plasma';
+  } else {
+    mapCv.style.display='none'; holoCv.style.display='block';
+    label.textContent='Holografia 2D — Interferograma r(x, y) · Cores de Interferência de Filme Fino';
+    if(!holoCv._drawn){ drawHologram(); holoCv._drawn=true; }
+  }
+}
+
+drawMap();
+drawColorbar();
+drawHistogram();
+</script>
+</body>
+</html>
